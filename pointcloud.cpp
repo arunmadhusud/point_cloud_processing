@@ -271,11 +271,17 @@ std::vector<typename pcl::PointCloud<PointT>::Ptr> Clustering(typename pcl::Poin
     return clusters;
 }
 
+/**
+ * @brief Computes the bounding box dimensions from a point cloud cluster.
+ * 
+ * @param cluster A shared pointer to the input PointCloud cluster.
+ * @return A Box struct containing the dimensions of the bounding box.
+ */
 template <typename PointT>
 Box BoundingBox(typename pcl::PointCloud<PointT>::Ptr cluster)
 {
-    PointT minPoint,maxPoint;
-    pcl::getMinMax3D(*cluster,minPoint,maxPoint);
+    PointT minPoint, maxPoint;
+    pcl::getMinMax3D(*cluster, minPoint, maxPoint);
 
     Box box;
     box.x_min = minPoint.x;
@@ -286,67 +292,98 @@ Box BoundingBox(typename pcl::PointCloud<PointT>::Ptr cluster)
     box.z_max = maxPoint.z;
 
     return box;
-
 }
 
-// Draw wire frame box with filled transparent color 
+/**
+ * @brief Renders a wireframe and filled transparent color box in the PCLVisualizer.
+ * 
+ * @param viewer A shared pointer to the PCLVisualizer object.
+ * @param box The Box struct defining the dimensions of the box.
+ * @param id An integer identifier for the box.
+ * @param color The color of the box in RGB format.
+ * @param opacity The opacity of the filled box (0.0 transparent to 1.0 opaque).
+ */
 void renderBox(pcl::visualization::PCLVisualizer::Ptr& viewer, Box box, int id, Color color, float opacity)
 {
-	if(opacity > 1.0)
-		opacity = 1.0;
-	if(opacity < 0.0)
-		opacity = 0.0;
-	
-	std::string cube = "box"+std::to_string(id);
-    //viewer->addCube(box.bboxTransform, box.bboxQuaternion, box.cube_length, box.cube_width, box.cube_height, cube);
-    viewer->addCube(box.x_min, box.x_max, box.y_min, box.y_max, box.z_min, box.z_max, color.r, color.g, color.b, cube);
-    viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_REPRESENTATION, pcl::visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, cube); 
-    viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, color.r, color.g, color.b, cube);
-    viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, opacity, cube);
-    
-    std::string cubeFill = "boxFill"+std::to_string(id);
-    //viewer->addCube(box.bboxTransform, box.bboxQuaternion, box.cube_length, box.cube_width, box.cube_height, cubeFill);
-    viewer->addCube(box.x_min, box.x_max, box.y_min, box.y_max, box.z_min, box.z_max, color.r, color.g, color.b, cubeFill);
-    viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_REPRESENTATION, pcl::visualization::PCL_VISUALIZER_REPRESENTATION_SURFACE, cubeFill); 
-    viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, color.r, color.g, color.b, cubeFill);
-    viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, opacity*0.3, cubeFill);
+    // Ensure opacity is within valid range
+    if (opacity > 1.0)
+        opacity = 1.0;
+    if (opacity < 0.0)
+        opacity = 0.0;
+
+    // Create unique identifiers for wireframe and filled box representations
+    std::string wireframeCube = "box" + std::to_string(id);
+    std::string filledCube = "boxFill" + std::to_string(id);
+
+    // Add wireframe box
+    viewer->addCube(box.x_min, box.x_max, box.y_min, box.y_max, box.z_min, box.z_max,
+                    color.r, color.g, color.b, wireframeCube);
+    viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_REPRESENTATION,
+                                        pcl::visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME,
+                                        wireframeCube);
+    viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, color.r, color.g, color.b, wireframeCube);
+    viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, opacity, wireframeCube);
+
+    // Add filled transparent box
+    viewer->addCube(box.x_min, box.x_max, box.y_min, box.y_max, box.z_min, box.z_max,
+                    color.r, color.g, color.b, filledCube);
+    viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_REPRESENTATION,
+                                        pcl::visualization::PCL_VISUALIZER_REPRESENTATION_SURFACE,
+                                        filledCube);
+    viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_COLOR, color.r, color.g, color.b, filledCube);
+    viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, opacity * 0.3, filledCube);
 }
 
+/**
+ * @brief Retrieves paths to all PCD files in a directory.
+ * 
+ * @param dataPath The path to the directory containing PCD files.
+ * @return A vector of boost::filesystem::path objects representing paths to PCD files.
+ */
 std::vector<boost::filesystem::path> streamPcd(std::string dataPath)
 {
-
+    // Create a vector to store paths to PCD files
     std::vector<boost::filesystem::path> paths(boost::filesystem::directory_iterator{dataPath}, boost::filesystem::directory_iterator{});
 
-    // sort files in accending order so playback is chronological
+    // Sort files in ascending order for chronological playback
     sort(paths.begin(), paths.end());
 
     return paths;
-
 }
 
-void single_pcd(pcl::visualization::PCLVisualizer::Ptr& viewer,pcl::PointCloud<pcl::PointXYZI>::Ptr inputCloud)
+/**
+ * @brief Processes a single point cloud frame, including filtering, segmentation, clustering, and rendering.
+ * 
+ * @param viewer A shared pointer to the PCLVisualizer object for rendering.
+ * @param inputCloud A shared pointer to the input PointCloud.
+ */
+void single_pcd(pcl::visualization::PCLVisualizer::Ptr& viewer, pcl::PointCloud<pcl::PointXYZI>::Ptr inputCloud)
 {
+    // Filter the input cloud
     pcl::PointCloud<pcl::PointXYZI>::Ptr filteredCloud(new pcl::PointCloud<pcl::PointXYZI>);
     filteredCloud = FilterCloud<pcl::PointXYZI>(inputCloud, 0.2, Eigen::Vector4f(-15, -6.0, -3, 1), Eigen::Vector4f(30, 6.0, 10, 1));
 
-    // renderPointCloud(viewer, filteredCloud, "filteredCloud",Color(-1, -1, -1));
+    // Segment the plane and obstacle clusters
+    std::pair<pcl::PointCloud<pcl::PointXYZI>::Ptr, pcl::PointCloud<pcl::PointXYZI>::Ptr> segmentCloud = SegmentPlane<pcl::PointXYZI>(filteredCloud, 100, 0.2);
 
-    std::pair<pcl::PointCloud<pcl::PointXYZI>::Ptr, pcl::PointCloud<pcl::PointXYZI>::Ptr> segmentCloud = SegmentPlane<pcl::PointXYZI>(filteredCloud,100,0.2);
-    // renderPointCloud(viewer, segmentCloud.first, "obstCloud",Color(1,0,0));
-    renderPointCloud(viewer, segmentCloud.second, "planeCloud",Color(0,1,0));
+    // Render the segmented plane cloud
+    renderPointCloud(viewer, segmentCloud.second, "planeCloud", Color(0, 1, 0));
 
+    // Cluster the obstacle points
     std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> cloudClusters = Clustering<pcl::PointXYZI>(segmentCloud.first, 0.5, 10, 600);
-    int clusterId = 0;
-    std::vector<Color> colors = {Color(1,0,0),Color(0,0,1),Color(0,1,1)};
-    for (auto cluster: cloudClusters)
-    {
-        renderPointCloud(viewer, cluster, "obstCloud"+std::to_string(clusterId),colors[clusterId %(colors.size())]);
-        Box box = BoundingBox<pcl::PointXYZI>(cluster);
-        renderBox(viewer,box,clusterId,Color(0.5,0.5,0.5),0.5);
-        ++clusterId;
 
+    // Initialize cluster ID and colors for rendering
+    int clusterId = 0;
+    std::vector<Color> colors = {Color(1, 0, 0), Color(0, 0, 1), Color(0, 1, 1)};
+
+    // Render each cluster and its bounding box
+    for (auto cluster : cloudClusters)
+    {
+        renderPointCloud(viewer, cluster, "obstCloud" + std::to_string(clusterId), colors[clusterId % (colors.size())]);
+        Box box = BoundingBox<pcl::PointXYZI>(cluster);
+        renderBox(viewer, box, clusterId, Color(0.5, 0.5, 0.5), 0.5);
+        ++clusterId;
     }
-    
 }
 
 enum CameraAngle
@@ -354,27 +391,42 @@ enum CameraAngle
 	XY, TopDown, Side, FPS
 };
 
-//setAngle: SWITCH CAMERA ANGLE {XY, TopDown, Side, FPS}
+/**
+ * @brief Initializes the camera position and view angle for the PCLVisualizer.
+ * 
+ * @param setAngle The desired camera angle (XY, TopDown, Side, FPS).
+ * @param viewer A shared pointer to the PCLVisualizer object.
+ */
 void initCamera(CameraAngle setAngle, pcl::visualization::PCLVisualizer::Ptr& viewer)
 {
+    // Set background color
+    viewer->setBackgroundColor(0, 0, 0);
 
-    viewer->setBackgroundColor (0, 0, 0);
-    
-    // set camera position and angle
+    // Initialize camera parameters
     viewer->initCameraParameters();
-    // distance away in meters
+
+    // Distance away from origin in meters
     int distance = 16;
-    
-    switch(setAngle)
+
+    // Set camera position based on the chosen angle
+    switch (setAngle)
     {
-        case XY : viewer->setCameraPosition(-distance, -distance, distance, 1, 1, 0); break;
-        case TopDown : viewer->setCameraPosition(0, 0, distance, 1, 0, 1); break;
-        case Side : viewer->setCameraPosition(0, -distance, 0, 0, 0, 1); break;
-        case FPS : viewer->setCameraPosition(-10, 0, 0, 0, 0, 1);
+    case XY:
+        viewer->setCameraPosition(-distance, -distance, distance, 1, 1, 0);
+        break;
+    case TopDown:
+        viewer->setCameraPosition(0, 0, distance, 1, 0, 1);
+        break;
+    case Side:
+        viewer->setCameraPosition(0, -distance, 0, 0, 0, 1);
+        break;
+    case FPS:
+        viewer->setCameraPosition(-10, 0, 0, 0, 0, 1);
     }
 
-    if(setAngle!=FPS)
-        viewer->addCoordinateSystem (1.0);
+    // Add coordinate system if not in FPS mode
+    if (setAngle != FPS)
+        viewer->addCoordinateSystem(1.0);
 }
 
 
@@ -384,15 +436,15 @@ void initCamera(CameraAngle setAngle, pcl::visualization::PCLVisualizer::Ptr& vi
 
 int main()
 {
-    
+    // Initialize PCLVisualizer and input cloud pointer
     pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
     pcl::PointCloud<pcl::PointXYZI>::Ptr inputCloud(new pcl::PointCloud<pcl::PointXYZI>);
-    
 
-    
+    // Initialize camera angle and set it
     CameraAngle setAngle = XY;
     initCamera(setAngle, viewer);
-
+    
+    // // Display a single pcd file
     // inputCloud = loadPcd<pcl::PointXYZI>("/home/arun/pointcloud_handling/0000000000.pcd");
     // single_pcd(viewer,inputCloud);
     // while (!viewer->wasStopped())
@@ -400,34 +452,35 @@ int main()
     //     viewer->spinOnce();
     // }
     
+    // Load and display PCD files in a loop for streaming playback
     std::vector<boost::filesystem::path> stream = streamPcd("../data/");
     auto streamIterator = stream.begin();
 
-    // Define the desired FPS
+    // Define desired FPS and delay
     int fps = 30;
-    int delay = 1000 / fps;  // Delay in milliseconds
+    int delay = 1000 / fps; // Delay in milliseconds
 
-    while (!viewer->wasStopped ())
+    while (!viewer->wasStopped())
     {
+        // Clear previous point clouds and shapes from viewer
+        viewer->removeAllPointClouds();
+        viewer->removeAllShapes();
 
-    // Clear viewer
-    viewer->removeAllPointClouds();
-    viewer->removeAllShapes();
+        // Load PCD file and process
+        inputCloud = loadPcd<pcl::PointXYZI>((*streamIterator).string());
+        single_pcd(viewer, inputCloud);
 
-    // Load pcd and run obstacle detection process
-    inputCloud = loadPcd<pcl::PointXYZI>((*streamIterator).string());
-    single_pcd(viewer, inputCloud);        
-    streamIterator++;
+        // Increment iterator and loop back to beginning if end is reached
+        streamIterator++;
+        if (streamIterator == stream.end())
+            streamIterator = stream.begin();
 
-    if(streamIterator == stream.end())
-        streamIterator = stream.begin();
-
-    viewer->spinOnce ();
-    std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+        // Update viewer and wait before loading next frame
+        viewer->spinOnce();
+        std::this_thread::sleep_for(std::chrono::milliseconds(delay));
     }
 
     return 0;
 }
-
 
 
