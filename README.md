@@ -45,12 +45,9 @@ After installing the necessary dependencies, you can run the project scripts to 
 ```
 
 ## Results
-- Output point cloud stream
+- Output point cloud stream after operations
 
-
-```markdown
-![Alt Text](/home/arun/pointcloud_handling/output.gif)
-```
+![Alt Text](output.gif)
 
 ## Acknowledgements
 
