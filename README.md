@@ -25,7 +25,7 @@ To run this project, you'll need to have PCL and its dependencies installed. Fol
 2. Clone the repository:
     ```bash
     git clone 
-    cd point-cloud-processing
+    cd point_cloud_processing
     ```
 
 3. Create a build directory and compile the project:
